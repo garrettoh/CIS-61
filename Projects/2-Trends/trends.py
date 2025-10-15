@@ -38,15 +38,14 @@ def make_tweet(text, time, lat, lon):
 def tweet_text(tweet):
     """Return a string, the words in the text of a tweet."""
     return tweet['text']
-
 def tweet_time(tweet):
     """Return the datetime representing when a tweet was posted."""
     return tweet['time']
 
-
 def tweet_location(tweet):
     """Return a position representing a tweet's location."""
     return make_position(tweet['latitude'], tweet['longitude'])
+
 # The tweet abstract data type, implemented as a function.
 
 def make_tweet_fn(text, time, lat, lon):
@@ -60,9 +59,6 @@ def make_tweet_fn(text, time, lat, lon):
     >>> latitude(tweet_location_fn(t))
     38
     """
-    
-    
-    # Please don't call make_tweet in your solution
     def tweet(attribute):
         if attribute == 'text':
             return text
@@ -73,8 +69,7 @@ def make_tweet_fn(text, time, lat, lon):
         elif attribute == 'lon':
             return lon
     return tweet
-
-
+    # Please don't call make_tweet in your solution
 
 def tweet_text_fn(tweet):
     """Return a string, the words in the text of a functional tweet."""
@@ -114,9 +109,6 @@ def extract_words(text):
     >>> extract_words('@(cat$.on^#$my&@keyboard***@#*')
     ['cat', 'on', 'my', 'keyboard']
     """
-    # Create a list of words by looping through the characters in text
-    # and using ascii_letters to distinguish between letters and
-    # non-letters.
     word = ''
     words = []
     while text:
@@ -129,7 +121,6 @@ def extract_words(text):
     if word:
         words.append(word)
     return words
-
 
 def make_sentiment(value):
     """Return a sentiment, which represents a value that may not exist.
@@ -153,7 +144,6 @@ def make_sentiment(value):
 
 def has_sentiment(s):
     """Return whether sentiment s has a value."""
-    assert s is not None, 'No sentiment value'
     return s['value'] is not None
 
 def sentiment_value(s):
@@ -196,16 +186,19 @@ def analyze_tweet_sentiment(tweet):
     False
     """
     # You may change any of the lines below.
-    average = make_sentiment(None)
-    total, count = 0, 0
-    for word in tweet_words(tweet):
-        sentiment = get_word_sentiment(word)
+    words = tweet_words(tweet)
+    i = 0
+    total = 0
+    count = 0
+    while i < len(words):
+        sentiment = get_word_sentiment(words[i])
         if has_sentiment(sentiment):
             total += sentiment_value(sentiment)
             count += 1
-    if count > 0:
-        average = make_sentiment(total / count)
-    return average
+        i += 1
+    if count == 0:
+        return make_sentiment(None)
+    return make_sentiment(total / count)
 
 
 #################################
@@ -234,10 +227,11 @@ def find_centroid(polygon):
     >>> tuple(map(float, find_centroid([p1, p2, p1])))  # A zero-area polygon
     (1.0, 2.0, 0.0)
     """
+    i = 0
     area = 0
     cx = 0
     cy = 0
-    for i in range(len(polygon) - 1):
+    while i < len(polygon) - 1:
         lat_i = latitude(polygon[i])
         lon_i = longitude(polygon[i])
         lat_next = latitude(polygon[i + 1])
@@ -246,12 +240,14 @@ def find_centroid(polygon):
         area += a
         cx += (lat_i + lat_next) * a
         cy += (lon_i + lon_next) * a
+        i += 1
     area *= 0.5
     if area == 0:
         return latitude(polygon[0]), longitude(polygon[0]), 0.0
     cx /= (6 * area)
     cy /= (6 * area)
     return cx, cy, abs(area)
+
 def find_state_center(polygons):
     """Compute the geographic center of a state, averaged over its polygons.
 
@@ -273,21 +269,49 @@ def find_state_center(polygons):
     >>> round(longitude(hi), 5)
     -156.21763
     """
+    i = 0
     total_area = 0
     weighted_lat = 0
     weighted_lon = 0
-    for polygon in polygons:
-        lat, lon, area = find_centroid(polygon)
+    while i < len(polygons):
+        lat, lon, area = find_centroid(polygons[i])
         total_area += area
         weighted_lat += lat * area
         weighted_lon += lon * area
+        i += 1
     if total_area == 0:
         return make_position(weighted_lat, weighted_lon)
     return make_position(weighted_lat / total_area, weighted_lon / total_area)
 
+
+
 ###################################
 # Phase 3: The Mood of the Nation #
 ###################################
+
+
+
+def find_nearest_state(tweet):
+    state_names = list(us_states.keys())
+    centers = {}
+    i = 0
+    while i < len(state_names):
+        name = state_names[i]
+        centers[name] = find_state_center(us_states[name])
+        i += 1
+    loc = tweet_location(tweet)
+    nearest = None
+    nearest_distance = None
+    j = 0
+    while j < len(state_names):
+        name = state_names[j]
+        dist = geo_distance(loc, centers[name])
+        if nearest is None or dist < nearest_distance:
+            nearest = name
+            nearest_distance = dist
+        j += 1
+    return nearest
+
 
 def group_tweets_by_state(tweets):
     """Return a dictionary that aggregates tweets by their nearest state center.
@@ -308,12 +332,34 @@ def group_tweets_by_state(tweets):
     >>> tweet_string(california_tweets[0])
     '"welcome to san francisco" @ (38, -122)'
     """
-    tweets_by_state = {state: [] for state in us_states}
-    for tweet in tweets:
+    tweets_by_state = {}
+    i = 0
+    while i < len(tweets):
+        tweet = tweets[i]
         state = find_nearest_state(tweet)
         if state is not None:
+            if state not in tweets_by_state:
+                tweets_by_state[state] = []
             tweets_by_state[state].append(tweet)
+        i += 1
     return tweets_by_state
+
+
+def average_sentiment(sentiments):
+    i = 0
+    total = 0
+    count = 0
+    while i < len(sentiments):
+        s = sentiments[i]
+        if has_sentiment(s):
+            total += sentiment_value(s)
+            count += 1
+        i += 1
+    if count == 0:
+        return None
+    return total / count
+
+
 
 def average_sentiments(tweets_by_state):
     """Calculate the average sentiment of the states by averaging over all
@@ -327,13 +373,21 @@ def average_sentiments(tweets_by_state):
 
     tweets_by_state -- A dictionary from state names to lists of tweets
     """
-    
     averaged_state_sentiments = {}
-    for state, tweets in tweets_by_state.items():
-        sentiments = [analyze_tweet_sentiment(tweet) for tweet in tweets]
+    states = list(tweets_by_state.keys())
+    i = 0
+    while i < len(states):
+        state = states[i]
+        tweets = tweets_by_state[state]
+        j = 0
+        sentiments = []
+        while j < len(tweets):
+            sentiments.append(analyze_tweet_sentiment(tweets[j]))
+            j += 1
         average = average_sentiment(sentiments)
         if average is not None:
             averaged_state_sentiments[state] = average
+        i += 1
     return averaged_state_sentiments
 
 
